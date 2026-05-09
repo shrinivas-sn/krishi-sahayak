@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getComplaints, insertComplaint } from '@/lib/db';
+import { getComplaints, insertComplaint, updateComplaintStatus } from '@/lib/db';
 import { getUserFromSession } from '@/lib/auth';
 import { promises as fs } from 'fs';
 import path from 'path';
@@ -11,7 +11,7 @@ export async function GET() {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
-    const complaints = getComplaints();
+    const complaints = await getComplaints();
     return NextResponse.json({ success: true, data: complaints });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
       videoPath = `/uploads/${filename}`;
     }
 
-    const complaintId = insertComplaint({
+    const complaintId = await insertComplaint({
       farmerId: user.id!,
       issueType,
       description,
@@ -99,8 +99,7 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Missing required fields' }, { status: 400 });
     }
     
-    const { updateComplaintStatus } = await import('@/lib/db');
-    updateComplaintStatus(id, status);
+    await updateComplaintStatus(id, status);
     
     return NextResponse.json({ success: true });
   } catch (error: any) {

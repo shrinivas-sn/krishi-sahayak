@@ -7,21 +7,21 @@ export async function getUserFromSession() {
 
   if (!token) return null;
 
-  const session = getSession(token);
+  const session = await getSession(token);
   if (!session) return null;
 
   if (session.userType === 'farmer') {
-    const farmer = getFarmerById(session.userId);
+    const farmer = await getFarmerById(session.userId);
     if (!farmer) return null;
     const { passwordHash, ...safeFarmer } = farmer;
     return { ...safeFarmer, userType: 'farmer' };
   } else if (session.userType === 'officer') {
-    const officer = getOfficerById(session.userId);
+    const officer = await getOfficerById(session.userId);
     if (!officer) return null;
     const { passwordHash, ...safeOfficer } = officer;
     return { ...safeOfficer, userType: 'officer' };
   } else if (session.userType === 'authority') {
-    const authority = getAuthorityById(session.userId);
+    const authority = await getAuthorityById(session.userId);
     if (!authority) return null;
     const { passwordHash, ...safeAuthority } = authority;
     return { ...safeAuthority, userType: 'authority' };

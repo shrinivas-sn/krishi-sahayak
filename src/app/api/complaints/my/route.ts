@@ -11,12 +11,12 @@ export async function GET() {
       return NextResponse.json({ success: false, error: 'Not authenticated' }, { status: 401 });
     }
 
-    const session = getSession(token);
+    const session = await getSession(token);
     if (!session || session.userType !== 'farmer') {
       return NextResponse.json({ success: false, error: 'Not authorized as farmer' }, { status: 403 });
     }
 
-    const complaints = getComplaintsByFarmer(session.userId);
+    const complaints = await getComplaintsByFarmer(session.userId);
     return NextResponse.json({ success: true, data: complaints });
   } catch (error: any) {
     console.error('Fetch complaints error:', error);

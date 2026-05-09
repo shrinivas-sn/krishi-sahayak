@@ -15,11 +15,11 @@ export async function POST(req: NextRequest) {
     let user;
     
     if (userType === 'farmer') {
-      user = getFarmerByPhone(identifier);
+      user = await getFarmerByPhone(identifier);
     } else if (userType === 'officer') {
-      user = getOfficerByOfficerId(identifier);
+      user = await getOfficerByOfficerId(identifier);
     } else if (userType === 'authority') {
-      user = getAuthorityByPhone(identifier);
+      user = await getAuthorityByPhone(identifier);
     } else {
       return NextResponse.json({ success: false, error: 'Invalid userType' }, { status: 400 });
     }
@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
     const token = uuidv4();
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(); // 7 days
 
-    createSession({
+    await createSession({
       token,
       userId: user.id!,
       userType: userType as 'farmer' | 'officer' | 'authority',

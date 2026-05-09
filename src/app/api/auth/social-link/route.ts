@@ -11,7 +11,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: 'Not authenticated' }, { status: 401 });
     }
 
-    const session = getSession(token);
+    const session = await getSession(token);
     if (!session || session.userType !== 'farmer') {
       return NextResponse.json({ success: false, error: 'Not authorized as farmer' }, { status: 403 });
     }
@@ -19,7 +19,7 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { twitterUsername, twitterPassword, facebookUsername, facebookPassword } = body;
 
-    updateFarmerSocials(session.userId, twitterUsername, twitterPassword, facebookUsername, facebookPassword);
+    await updateFarmerSocials(session.userId, twitterUsername, twitterPassword, facebookUsername, facebookPassword);
 
     return NextResponse.json({ success: true, message: 'Social media credentials linked successfully.' });
   } catch (error: any) {

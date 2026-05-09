@@ -1,6 +1,6 @@
 'use client';
 
-import { motion } from 'framer-motion';
+import { motion, Variants } from 'framer-motion';
 
 const toolsList = [
   { name: 'Tractor', icon: '🚜', desc: 'The backbone of modern farming. Used for heavy pulling, plowing, towing, and providing power to other implements.' },
@@ -24,7 +24,7 @@ const toolsList = [
 ];
 
 export default function FarmingTools() {
-  const staggerContainer = {
+  const staggerContainer: Variants = {
     hidden: { opacity: 0 },
     show: {
       opacity: 1,
@@ -32,7 +32,7 @@ export default function FarmingTools() {
     }
   };
 
-  const popUp = {
+  const popUp: Variants = {
     hidden: { opacity: 0, scale: 0.8, y: 20 },
     show: { opacity: 1, scale: 1, y: 0, transition: { type: 'spring', stiffness: 100 } }
   };

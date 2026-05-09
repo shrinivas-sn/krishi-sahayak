@@ -39,32 +39,32 @@ export async function POST(req: NextRequest) {
       const phone = formData.get('phone') as string;
       if (!phone) return NextResponse.json({ success: false, error: 'Phone is required' }, { status: 400 });
       
-      if (getFarmerByPhone(phone)) {
+      if (await getFarmerByPhone(phone)) {
         return NextResponse.json({ success: false, error: 'Phone number already registered' }, { status: 400 });
       }
       
-      insertFarmer({ name, phone, passwordHash, documentPath });
+      await insertFarmer({ name, phone, passwordHash, documentPath });
       
     } else if (userType === 'officer') {
       const officerId = formData.get('officerId') as string;
       const department = formData.get('department') as string;
       if (!officerId || !department) return NextResponse.json({ success: false, error: 'Officer ID and Department required' }, { status: 400 });
       
-      if (getOfficerByOfficerId(officerId)) {
+      if (await getOfficerByOfficerId(officerId)) {
         return NextResponse.json({ success: false, error: 'Officer ID already registered' }, { status: 400 });
       }
       
-      insertOfficer({ name, officerId, passwordHash, department, documentPath, isVerified: 1 });
+      await insertOfficer({ name, officerId, passwordHash, department, documentPath, isVerified: 1 });
     } else if (userType === 'authority') {
       const phone = formData.get('phone') as string;
       const department = formData.get('department') as string;
       if (!phone || !department) return NextResponse.json({ success: false, error: 'Phone and Department required' }, { status: 400 });
       
-      if (getAuthorityByPhone(phone)) {
+      if (await getAuthorityByPhone(phone)) {
         return NextResponse.json({ success: false, error: 'Phone number already registered' }, { status: 400 });
       }
       
-      insertAuthority({ name, phone, passwordHash, department });
+      await insertAuthority({ name, phone, passwordHash, department });
     } else {
       return NextResponse.json({ success: false, error: 'Invalid userType' }, { status: 400 });
     }

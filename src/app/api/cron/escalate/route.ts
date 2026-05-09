@@ -12,15 +12,15 @@ function matchDepartment(issueType: string): string {
 
 export async function GET() {
   try {
-    const delayedComplaints = getDelayedComplaints();
+    const delayedComplaints = await getDelayedComplaints();
     let escalatedCount = 0;
 
     for (const complaint of delayedComplaints) {
       const targetDept = matchDepartment(complaint.issueType);
-      let authorities = getAuthoritiesByDepartment(targetDept);
+      let authorities = await getAuthoritiesByDepartment(targetDept);
       
       if (authorities.length === 0) {
-        authorities = getAuthoritiesByDepartment('General Admin');
+        authorities = await getAuthoritiesByDepartment('General Admin');
       }
       
       if (authorities.length === 0) {
@@ -33,16 +33,16 @@ export async function GET() {
         sendSMS(auth.phone, message);
       }
 
-      markComplaintEscalated(complaint.id!);
+      await markComplaintEscalated(complaint.id!);
       escalatedCount++;
     }
 
-    const socialDelayedComplaints = getSocialEscalatedComplaints();
+    const socialDelayedComplaints = await getSocialEscalatedComplaints();
     let socialEscalatedCount = 0;
 
     for (const complaint of socialDelayedComplaints) {
       if (complaint.id) {
-        markComplaintSocialEscalated(complaint.id);
+        await markComplaintSocialEscalated(complaint.id);
         socialEscalatedCount++;
       }
     }

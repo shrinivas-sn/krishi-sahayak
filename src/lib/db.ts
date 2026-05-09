@@ -1,5 +1,73 @@
-import Database from 'better-sqlite3';
-import path from 'path';
+import { createClient } from '@libsql/client';
+
+const db = createClient({
+  url: process.env.TURSO_DATABASE_URL!,
+  authToken: process.env.TURSO_AUTH_TOKEN!,
+});
+
+// Initialize tables on first run
+async function initDb() {
+  await db.executeMultiple(`
+    CREATE TABLE IF NOT EXISTS farmers (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      phone TEXT NOT NULL UNIQUE,
+      passwordHash TEXT NOT NULL,
+      documentPath TEXT,
+      twitterUsername TEXT,
+      twitterPassword TEXT,
+      facebookUsername TEXT,
+      facebookPassword TEXT,
+      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS officers (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      officerId TEXT NOT NULL UNIQUE,
+      passwordHash TEXT NOT NULL,
+      department TEXT NOT NULL,
+      documentPath TEXT,
+      isVerified INTEGER DEFAULT 1,
+      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS higher_authorities (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      phone TEXT NOT NULL UNIQUE,
+      passwordHash TEXT NOT NULL,
+      department TEXT NOT NULL,
+      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS sessions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      token TEXT NOT NULL UNIQUE,
+      userId INTEGER NOT NULL,
+      userType TEXT NOT NULL,
+      expiresAt DATETIME NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS complaints_v2 (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      farmerId INTEGER NOT NULL,
+      issueType TEXT NOT NULL,
+      description TEXT NOT NULL,
+      imagePath TEXT,
+      videoPath TEXT,
+      location TEXT,
+      status TEXT DEFAULT 'Pending',
+      escalated INTEGER DEFAULT 0,
+      socialEscalated INTEGER DEFAULT 0,
+      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(farmerId) REFERENCES farmers(id)
+    );
+  `);
+}
+
+// Run init (safe because of IF NOT EXISTS)
+initDb().catch(console.error);
 
 export interface Farmer {
   id?: number;
@@ -57,252 +125,179 @@ export interface Complaint {
   createdAt?: string;
 }
 
-const dbPath = path.resolve(process.cwd(), 'complaints.db');
-
-// @ts-ignore
-const db = global.db || new Database(dbPath);
-// @ts-ignore
-if (process.env.NODE_ENV !== 'production') global.db = db;
-
-db.exec(`
-  CREATE TABLE IF NOT EXISTS farmers (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    phone TEXT NOT NULL UNIQUE,
-    passwordHash TEXT NOT NULL,
-    documentPath TEXT,
-    twitterUsername TEXT,
-    twitterPassword TEXT,
-    facebookUsername TEXT,
-    facebookPassword TEXT,
-    createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
-  );
-
-  CREATE TABLE IF NOT EXISTS officers (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    officerId TEXT NOT NULL UNIQUE,
-    passwordHash TEXT NOT NULL,
-    department TEXT NOT NULL,
-    documentPath TEXT,
-    isVerified INTEGER DEFAULT 1,
-    createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
-  );
-
-  CREATE TABLE IF NOT EXISTS higher_authorities (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    phone TEXT NOT NULL UNIQUE,
-    passwordHash TEXT NOT NULL,
-    department TEXT NOT NULL,
-    createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
-  );
-
-  CREATE TABLE IF NOT EXISTS sessions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    token TEXT NOT NULL UNIQUE,
-    userId INTEGER NOT NULL,
-    userType TEXT NOT NULL,
-    expiresAt DATETIME NOT NULL
-  );
-
-  CREATE TABLE IF NOT EXISTS complaints_v2 (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    farmerId INTEGER NOT NULL,
-    issueType TEXT NOT NULL,
-    description TEXT NOT NULL,
-    imagePath TEXT,
-    location TEXT,
-    status TEXT DEFAULT 'Pending',
-    escalated INTEGER DEFAULT 0,
-    socialEscalated INTEGER DEFAULT 0,
-    createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY(farmerId) REFERENCES farmers(id)
-  );
-`);
-
-try {
-  db.exec('ALTER TABLE complaints_v2 ADD COLUMN escalated INTEGER DEFAULT 0;');
-} catch (e) {}
-
-try {
-  db.exec('ALTER TABLE complaints_v2 ADD COLUMN location TEXT;');
-} catch (e) {}
-
-try {
-  db.exec('ALTER TABLE complaints_v2 ADD COLUMN videoPath TEXT;');
-} catch (e) {}
-
-try {
-  db.exec('ALTER TABLE complaints_v2 ADD COLUMN socialEscalated INTEGER DEFAULT 0;');
-} catch (e) {}
-
-try {
-  db.exec('ALTER TABLE farmers ADD COLUMN twitterUsername TEXT;');
-  db.exec('ALTER TABLE farmers ADD COLUMN twitterPassword TEXT;');
-  db.exec('ALTER TABLE farmers ADD COLUMN facebookUsername TEXT;');
-  db.exec('ALTER TABLE farmers ADD COLUMN facebookPassword TEXT;');
-} catch (e) {}
-
-export function insertFarmer(farmer: Farmer): number | bigint {
-  const stmt = db.prepare(`
-    INSERT INTO farmers (name, phone, passwordHash, documentPath)
-    VALUES (@name, @phone, @passwordHash, @documentPath)
-  `);
-  const result = stmt.run(farmer);
-  return result.lastInsertRowid;
-}
-
-export function getFarmerByPhone(phone: string): Farmer | undefined {
-  const stmt = db.prepare('SELECT * FROM farmers WHERE phone = ?');
-  return stmt.get(phone) as Farmer | undefined;
-}
-
-export function updateFarmerSocials(id: number, twitterU?: string, twitterP?: string, fbU?: string, fbP?: string) {
-  const stmt = db.prepare(`
-    UPDATE farmers 
-    SET twitterUsername = ?, twitterPassword = ?, facebookUsername = ?, facebookPassword = ?
-    WHERE id = ?
-  `);
-  stmt.run(twitterU || null, twitterP || null, fbU || null, fbP || null, id);
-}
-
-export function getFarmerById(id: number): Farmer | undefined {
-  const stmt = db.prepare('SELECT * FROM farmers WHERE id = ?');
-  return stmt.get(id) as Farmer | undefined;
-}
-
-export function insertOfficer(officer: Officer): number | bigint {
-  const stmt = db.prepare(`
-    INSERT INTO officers (name, officerId, passwordHash, department, documentPath)
-    VALUES (@name, @officerId, @passwordHash, @department, @documentPath)
-  `);
-  const result = stmt.run(officer);
-  return result.lastInsertRowid;
-}
-
-export function getOfficerByOfficerId(officerId: string): Officer | undefined {
-  const stmt = db.prepare('SELECT * FROM officers WHERE officerId = ?');
-  return stmt.get(officerId) as Officer | undefined;
-}
-
-export function getOfficerById(id: number): Officer | undefined {
-  const stmt = db.prepare('SELECT * FROM officers WHERE id = ?');
-  return stmt.get(id) as Officer | undefined;
-}
-
-export function insertAuthority(authority: HigherAuthority): number | bigint {
-  const stmt = db.prepare(`
-    INSERT INTO higher_authorities (name, phone, passwordHash, department)
-    VALUES (@name, @phone, @passwordHash, @department)
-  `);
-  const result = stmt.run(authority);
-  return result.lastInsertRowid;
-}
-
-export function getAuthorityByPhone(phone: string): HigherAuthority | undefined {
-  const stmt = db.prepare('SELECT * FROM higher_authorities WHERE phone = ?');
-  return stmt.get(phone) as HigherAuthority | undefined;
-}
-
-export function getAuthorityById(id: number): HigherAuthority | undefined {
-  const stmt = db.prepare('SELECT * FROM higher_authorities WHERE id = ?');
-  return stmt.get(id) as HigherAuthority | undefined;
-}
-
-export function getAuthoritiesByDepartment(department: string): HigherAuthority[] {
-  const stmt = db.prepare('SELECT * FROM higher_authorities WHERE department = ?');
-  return stmt.all(department) as HigherAuthority[];
-}
-
-export function createSession(session: Session) {
-  const stmt = db.prepare(`
-    INSERT INTO sessions (token, userId, userType, expiresAt)
-    VALUES (@token, @userId, @userType, @expiresAt)
-  `);
-  stmt.run(session);
-}
-
-export function getSession(token: string): Session | undefined {
-  const stmt = db.prepare('SELECT * FROM sessions WHERE token = ? AND expiresAt > datetime(\'now\')');
-  return stmt.get(token) as Session | undefined;
-}
-
-export function deleteSession(token: string) {
-  const stmt = db.prepare('DELETE FROM sessions WHERE token = ?');
-  stmt.run(token);
-}
-
-export function getComplaints(): Complaint[] {
-  const stmt = db.prepare(`
-    SELECT c.*, f.name as farmerName 
-    FROM complaints_v2 c
-    JOIN farmers f ON c.farmerId = f.id
-    ORDER BY c.createdAt DESC
-  `);
-  return stmt.all() as Complaint[];
-}
-
-export function getComplaintsByFarmer(farmerId: number): Complaint[] {
-  const stmt = db.prepare(`
-    SELECT c.*, f.name as farmerName 
-    FROM complaints_v2 c
-    JOIN farmers f ON c.farmerId = f.id
-    WHERE c.farmerId = ?
-    ORDER BY c.createdAt DESC
-  `);
-  return stmt.all(farmerId) as Complaint[];
-}
-
-export function getDelayedComplaints(): Complaint[] {
-  const stmt = db.prepare(`
-    SELECT c.*, f.name as farmerName 
-    FROM complaints_v2 c
-    JOIN farmers f ON c.farmerId = f.id
-    WHERE c.status != 'Resolved' 
-      AND c.escalated = 0 
-      AND c.createdAt < datetime('now', '-2 minutes')
-  `);
-  return stmt.all() as Complaint[];
-}
-
-export function getSocialEscalatedComplaints(): Complaint[] {
-  const stmt = db.prepare(`
-    SELECT * FROM complaints_v2 
-    WHERE status != 'Resolved' 
-      AND socialEscalated = 0 
-      AND createdAt < datetime('now', '-5 minutes')
-  `);
-  return stmt.all() as Complaint[];
-}
-
-export function markComplaintEscalated(id: number) {
-  const stmt = db.prepare('UPDATE complaints_v2 SET escalated = 1 WHERE id = ?');
-  stmt.run(id);
-}
-
-export function markComplaintSocialEscalated(id: number) {
-  const stmt = db.prepare('UPDATE complaints_v2 SET socialEscalated = 1 WHERE id = ?');
-  stmt.run(id);
-}
-
-export function insertComplaint(complaint: Complaint): number | bigint {
-  const stmt = db.prepare(`
-    INSERT INTO complaints_v2 (farmerId, issueType, description, imagePath, videoPath, location)
-    VALUES (@farmerId, @issueType, @description, @imagePath, @videoPath, @location)
-  `);
-  const result = stmt.run({
-    farmerId: complaint.farmerId,
-    issueType: complaint.issueType,
-    description: complaint.description,
-    imagePath: complaint.imagePath,
-    videoPath: complaint.videoPath || null,
-    location: complaint.location || null
+export async function insertFarmer(farmer: Farmer): Promise<number | bigint> {
+  const result = await db.execute({
+    sql: `INSERT INTO farmers (name, phone, passwordHash, documentPath) VALUES (?, ?, ?, ?)`,
+    args: [farmer.name, farmer.phone, farmer.passwordHash, farmer.documentPath],
   });
-  return result.lastInsertRowid;
+  return result.lastInsertRowid!;
 }
 
-export function updateComplaintStatus(id: number, status: string) {
-  const stmt = db.prepare('UPDATE complaints_v2 SET status = @status WHERE id = @id');
-  stmt.run({ id, status });
+export async function getFarmerByPhone(phone: string): Promise<Farmer | undefined> {
+  const result = await db.execute({
+    sql: 'SELECT * FROM farmers WHERE phone = ?',
+    args: [phone],
+  });
+  return result.rows[0] as unknown as Farmer | undefined;
+}
+
+export async function updateFarmerSocials(id: number, twitterU?: string, twitterP?: string, fbU?: string, fbP?: string) {
+  await db.execute({
+    sql: `UPDATE farmers SET twitterUsername = ?, twitterPassword = ?, facebookUsername = ?, facebookPassword = ? WHERE id = ?`,
+    args: [twitterU || null, twitterP || null, fbU || null, fbP || null, id],
+  });
+}
+
+export async function getFarmerById(id: number): Promise<Farmer | undefined> {
+  const result = await db.execute({
+    sql: 'SELECT * FROM farmers WHERE id = ?',
+    args: [id],
+  });
+  return result.rows[0] as unknown as Farmer | undefined;
+}
+
+export async function insertOfficer(officer: Officer): Promise<number | bigint> {
+  const result = await db.execute({
+    sql: `INSERT INTO officers (name, officerId, passwordHash, department, documentPath) VALUES (?, ?, ?, ?, ?)`,
+    args: [officer.name, officer.officerId, officer.passwordHash, officer.department, officer.documentPath],
+  });
+  return result.lastInsertRowid!;
+}
+
+export async function getOfficerByOfficerId(officerId: string): Promise<Officer | undefined> {
+  const result = await db.execute({
+    sql: 'SELECT * FROM officers WHERE officerId = ?',
+    args: [officerId],
+  });
+  return result.rows[0] as unknown as Officer | undefined;
+}
+
+export async function getOfficerById(id: number): Promise<Officer | undefined> {
+  const result = await db.execute({
+    sql: 'SELECT * FROM officers WHERE id = ?',
+    args: [id],
+  });
+  return result.rows[0] as unknown as Officer | undefined;
+}
+
+export async function insertAuthority(authority: HigherAuthority): Promise<number | bigint> {
+  const result = await db.execute({
+    sql: `INSERT INTO higher_authorities (name, phone, passwordHash, department) VALUES (?, ?, ?, ?)`,
+    args: [authority.name, authority.phone, authority.passwordHash, authority.department],
+  });
+  return result.lastInsertRowid!;
+}
+
+export async function getAuthorityByPhone(phone: string): Promise<HigherAuthority | undefined> {
+  const result = await db.execute({
+    sql: 'SELECT * FROM higher_authorities WHERE phone = ?',
+    args: [phone],
+  });
+  return result.rows[0] as unknown as HigherAuthority | undefined;
+}
+
+export async function getAuthorityById(id: number): Promise<HigherAuthority | undefined> {
+  const result = await db.execute({
+    sql: 'SELECT * FROM higher_authorities WHERE id = ?',
+    args: [id],
+  });
+  return result.rows[0] as unknown as HigherAuthority | undefined;
+}
+
+export async function getAuthoritiesByDepartment(department: string): Promise<HigherAuthority[]> {
+  const result = await db.execute({
+    sql: 'SELECT * FROM higher_authorities WHERE department = ?',
+    args: [department],
+  });
+  return result.rows as unknown as HigherAuthority[];
+}
+
+export async function createSession(session: Session) {
+  await db.execute({
+    sql: `INSERT INTO sessions (token, userId, userType, expiresAt) VALUES (?, ?, ?, ?)`,
+    args: [session.token, session.userId, session.userType, session.expiresAt],
+  });
+}
+
+export async function getSession(token: string): Promise<Session | undefined> {
+  const result = await db.execute({
+    sql: `SELECT * FROM sessions WHERE token = ? AND expiresAt > datetime('now')`,
+    args: [token],
+  });
+  return result.rows[0] as unknown as Session | undefined;
+}
+
+export async function deleteSession(token: string) {
+  await db.execute({
+    sql: 'DELETE FROM sessions WHERE token = ?',
+    args: [token],
+  });
+}
+
+export async function getComplaints(): Promise<Complaint[]> {
+  const result = await db.execute({
+    sql: `SELECT c.*, f.name as farmerName FROM complaints_v2 c JOIN farmers f ON c.farmerId = f.id ORDER BY c.createdAt DESC`,
+    args: [],
+  });
+  return result.rows as unknown as Complaint[];
+}
+
+export async function getComplaintsByFarmer(farmerId: number): Promise<Complaint[]> {
+  const result = await db.execute({
+    sql: `SELECT c.*, f.name as farmerName FROM complaints_v2 c JOIN farmers f ON c.farmerId = f.id WHERE c.farmerId = ? ORDER BY c.createdAt DESC`,
+    args: [farmerId],
+  });
+  return result.rows as unknown as Complaint[];
+}
+
+export async function getDelayedComplaints(): Promise<Complaint[]> {
+  const result = await db.execute({
+    sql: `SELECT c.*, f.name as farmerName FROM complaints_v2 c JOIN farmers f ON c.farmerId = f.id WHERE c.status != 'Resolved' AND c.escalated = 0 AND c.createdAt < datetime('now', '-2 minutes')`,
+    args: [],
+  });
+  return result.rows as unknown as Complaint[];
+}
+
+export async function getSocialEscalatedComplaints(): Promise<Complaint[]> {
+  const result = await db.execute({
+    sql: `SELECT * FROM complaints_v2 WHERE status != 'Resolved' AND socialEscalated = 0 AND createdAt < datetime('now', '-5 minutes')`,
+    args: [],
+  });
+  return result.rows as unknown as Complaint[];
+}
+
+export async function markComplaintEscalated(id: number) {
+  await db.execute({
+    sql: 'UPDATE complaints_v2 SET escalated = 1 WHERE id = ?',
+    args: [id],
+  });
+}
+
+export async function markComplaintSocialEscalated(id: number) {
+  await db.execute({
+    sql: 'UPDATE complaints_v2 SET socialEscalated = 1 WHERE id = ?',
+    args: [id],
+  });
+}
+
+export async function insertComplaint(complaint: Complaint): Promise<number | bigint> {
+  const result = await db.execute({
+    sql: `INSERT INTO complaints_v2 (farmerId, issueType, description, imagePath, videoPath, location) VALUES (?, ?, ?, ?, ?, ?)`,
+    args: [
+      complaint.farmerId,
+      complaint.issueType,
+      complaint.description,
+      complaint.imagePath,
+      complaint.videoPath || null,
+      complaint.location || null,
+    ],
+  });
+  return result.lastInsertRowid!;
+}
+
+export async function updateComplaintStatus(id: number, status: string) {
+  await db.execute({
+    sql: 'UPDATE complaints_v2 SET status = ? WHERE id = ?',
+    args: [status, id],
+  });
 }
