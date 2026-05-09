@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { insertFarmer, insertOfficer, insertAuthority, getFarmerByPhone, getOfficerByOfficerId, getAuthorityByPhone } from '@/lib/db';
 import bcrypt from 'bcryptjs';
-import { promises as fs } from 'fs';
-import path from 'path';
+import { put } from '@vercel/blob';
 
 export async function POST(req: NextRequest) {
   try {
@@ -17,20 +16,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Missing required fields' }, { status: 400 });
     }
 
+    // Upload document to Vercel Blob (cloud storage) if provided
     let documentPath = null;
-    
     if (documentFile && documentFile.size > 0) {
-      const bytes = await documentFile.arrayBuffer();
-      const buffer = Buffer.from(bytes);
-      
-      const uploadDir = path.join(process.cwd(), 'public', 'documents', userType + 's');
-      await fs.mkdir(uploadDir, { recursive: true });
-      
-      const filename = `${Date.now()}-${documentFile.name.replace(/[^a-zA-Z0-9.]/g, '') || 'doc.pdf'}`;
-      const filepath = path.join(uploadDir, filename);
-      
-      await fs.writeFile(filepath, buffer);
-      documentPath = `/documents/${userType}s/${filename}`;
+      const filename = `documents/${userType}s/${Date.now()}-${documentFile.name.replace(/[^a-zA-Z0-9.]/g, '') || 'doc.pdf'}`;
+      const blob = await put(filename, documentFile, { access: 'public' });
+      documentPath = blob.url;
     }
 
     const passwordHash = await bcrypt.hash(password, 10);

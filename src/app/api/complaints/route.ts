@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getComplaints, insertComplaint, updateComplaintStatus } from '@/lib/db';
 import { getUserFromSession } from '@/lib/auth';
-import { promises as fs } from 'fs';
-import path from 'path';
+import { put } from '@vercel/blob';
 
 export async function GET() {
   try {
@@ -36,36 +35,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Missing required fields' }, { status: 400 });
     }
 
+    // Upload image to Vercel Blob if provided
     let imagePath = null;
-    
     if (imageFile && imageFile.size > 0) {
-      const bytes = await imageFile.arrayBuffer();
-      const buffer = Buffer.from(bytes);
-      
-      const publicUploadsDir = path.join(process.cwd(), 'public', 'uploads');
-      await fs.mkdir(publicUploadsDir, { recursive: true });
-      
-      const filename = `${Date.now()}-${imageFile.name.replace(/[^a-zA-Z0-9.]/g, '') || 'image.jpg'}`;
-      const filepath = path.join(publicUploadsDir, filename);
-      
-      await fs.writeFile(filepath, buffer);
-      imagePath = `/uploads/${filename}`;
+      const filename = `uploads/images/${Date.now()}-${imageFile.name.replace(/[^a-zA-Z0-9.]/g, '') || 'image.jpg'}`;
+      const blob = await put(filename, imageFile, { access: 'public' });
+      imagePath = blob.url;
     }
 
+    // Upload video to Vercel Blob if provided
     let videoPath = null;
-    
     if (videoFile && videoFile.size > 0) {
-      const bytes = await videoFile.arrayBuffer();
-      const buffer = Buffer.from(bytes);
-      
-      const publicUploadsDir = path.join(process.cwd(), 'public', 'uploads');
-      await fs.mkdir(publicUploadsDir, { recursive: true });
-      
-      const filename = `${Date.now()}-${videoFile.name.replace(/[^a-zA-Z0-9.]/g, '') || 'video.webm'}`;
-      const filepath = path.join(publicUploadsDir, filename);
-      
-      await fs.writeFile(filepath, buffer);
-      videoPath = `/uploads/${filename}`;
+      const filename = `uploads/videos/${Date.now()}-${videoFile.name.replace(/[^a-zA-Z0-9.]/g, '') || 'video.webm'}`;
+      const blob = await put(filename, videoFile, { access: 'public' });
+      videoPath = blob.url;
     }
 
     const complaintId = await insertComplaint({
